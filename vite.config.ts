@@ -1,9 +1,60 @@
 import { ConfigEnv, UserConfig } from 'vite';
 import vue from '@vitejs/plugin-vue'
+import AutoImport from 'unplugin-auto-import/vite'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import visualizer from "rollup-plugin-visualizer";
 
 export default ({ mode }: ConfigEnv): UserConfig => {
+  const plugins = [];
+
+  // 打包生产环境才引入的插件
+  if (process.env.NODE_ENV === "production") {
+    // 打包依赖展示
+    plugins.push(
+      visualizer({
+        open: true,
+        gzipSize: true,
+        brotliSize: true,
+      })
+    );
+  }
   return {
-    plugins: [vue()],
+    root: './',
+    base: '',
+    resolve: {
+      extensions: ['.js', '.vue', '.json'],
+      alias: [{
+        find: '@',
+        replacement: '/src'
+      }, {
+        find: '~@',
+        replacement: '/src'
+      }, {
+        find: '@charts',
+        replacement: '/src/components/charts'
+      }]
+    },
+    css: {
+      preprocessorOptions: {
+        scss: {
+          additionalData: `
+            @import "@/assets/css/var.scss";
+            @import "@/assets/css/util.scss";
+          `
+        },
+      },
+    },
+    plugins: [
+      vue(),
+      AutoImport({
+        resolvers: [ElementPlusResolver()],
+      }),
+      Components({
+        resolvers: [ElementPlusResolver()],
+      }),
+      ...plugins,
+    ],
     build: {
       cssCodeSplit: true, // 如果设置为false，整个项目中的所有 CSS 将被提取到一个 CSS 文件中
       sourcemap: false, // 构建后是否生成 source map 文件。如果为 true，将会创建一个独立的 source map 文件
@@ -19,23 +70,19 @@ export default ({ mode }: ConfigEnv): UserConfig => {
       },
       rollupOptions: {
         output: {
-          manualChunks(id) {
+          manualChunks(id) { //静态资源分拆打包
             if (id.includes('node_modules')) {
-              const arr = id.toString().split('node_modules/')[1].split('/')
-              switch (arr[0]) {
-                case '@naturefw': // 自然框架
-                case '@popperjs':
-                case '@vue':
-                case 'element-plus': // UI 库
-                case '@element-plus': // 图标
-                  return '_' + arr[0]
-                default:
-                  return '__vendor'
-              }
+              return id.toString().split('node_modules/')[1].split('/')[0].toString();
             }
-          }
+          },
+          chunkFileNames: 'static/js/[name]-[hash].js',
+          entryFileNames: 'static/js/[name]-[hash].js',
+          assetFileNames: 'static/[ext]/[name]-[hash].[ext]',
         },
       },
+    },
+    server: {
+      port: 8080
     },
   }
 }
